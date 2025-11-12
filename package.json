@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "bowser": "^2.12.1",
+    "detect-browser": "^5.3.0",
+    "device-detector-js": "^3.0.3",
+    "express-useragent": "^2.0.2",
+    "jsdom": "^27.0.1",
+    "my-ua-parser": "^2.0.4",
+    "ua-parser-js": "^2.0.6",
+    "useragent": "^2.3.0"
+  }
+}

@@ -104,6 +104,7 @@ function renderForUA(uaString) {
 
 
   // bowser parsed info
+  /* Does not report phone model
   try {
     const bowserInfo = parseUserAgentBowser(ua);
     out += 'bowser Parsed Info:\n';
@@ -114,7 +115,7 @@ function renderForUA(uaString) {
     out += JSON.stringify({ error: String(err) }, null, 2);
     out += '\n\n';
   }
-
+*/
   // ua-parser-js parsed info
   try {
     const uaInfo = parseUserAgentUAParser(ua);

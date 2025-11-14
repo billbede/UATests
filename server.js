@@ -29,6 +29,7 @@ const server = createServer((req, res) => {
     const ua = req.headers['user-agent'] || '';
 
     // bowser parsed info
+    /* Does not report phone model
     try {
       const bowserInfo = parseUserAgentBowser(ua);
       res.write('bowser Parsed Info:\n');
@@ -39,7 +40,7 @@ const server = createServer((req, res) => {
       res.write(JSON.stringify({ error: String(err) }, null, 2));
       res.write('\n\n');
     }
-
+*/
     // ua-parser-js parsed info
     try {
       const uaInfo = parseUserAgentUAParser(ua);

@@ -5,81 +5,145 @@ try {
   throw new Error('bowser is not installed. Run: npm install bowser');
 }
 
+const BOT_RE = /\b(bot|crawler|spider|crawl|slurp|fetch|mediapartners|pingdom|statuscake|uptime|monitor|scanner|archiver|validator|preview|transcoder)\b/i;
+
+function splitVersion(version) {
+  if (!version || typeof version !== 'string') return { raw: version || null, major: null, minor: null, patch: null };
+  const parts = version.split('.').map(p => p || null);
+  return { raw: version, major: parts[0] || null, minor: parts[1] || null, patch: parts[2] || null };
+}
+
+function inferEngineFromUA(ua) {
+  const m = /\b(AppleWebKit|Gecko|Trident|Presto|Blink|EdgeHTML)\/?([0-9\.]*)/i.exec(ua || '');
+  if (!m) return { name: null, version: null, versionParts: splitVersion(null) };
+  return { name: m[1], version: m[2] || null, versionParts: splitVersion(m[2] || null) };
+}
+
 /**
- * Normalize Bowser result into a compact, consistent shape.
- * @param {string} uaString
- * @returns {object}
+ * Normalizes Bowser parse results into a consistent, maximal shape.
+ * Handles multiple export shapes (parse, getParser/getResult, default interop).
  */
 function parseUserAgentBowser(uaString) {
   const ua = uaString || '';
 
-  // Determine how to call Bowser depending on export shape
+  // Resolve rawResult from Bowser in several common ways
   let rawResult = null;
 
   // 1) bowser.parse(ua)
   if (bowser && typeof bowser.parse === 'function') {
-    rawResult = bowser.parse(ua);
+    try { rawResult = bowser.parse(ua); } catch (e) { rawResult = null; }
   }
 
   // 2) bowser.getParser(ua).getResult()
-  else if (bowser && typeof bowser.getParser === 'function') {
+  if (!rawResult && bowser && typeof bowser.getParser === 'function') {
     try {
       const parser = bowser.getParser(ua);
       rawResult = parser && (typeof parser.getResult === 'function' ? parser.getResult() : parser);
-    } catch (err) {
+    } catch (e) {
       rawResult = null;
     }
   }
 
-  // 3) default export shapes (ES module interop)
-  else if (bowser && bowser.default) {
+  // 3) default export interop (ESM/CJS)
+  if (!rawResult && bowser && bowser.default) {
     const b = bowser.default;
-    if (typeof b.parse === 'function') rawResult = b.parse(ua);
-    else if (typeof b.getParser === 'function') {
-      const parser = b.getParser(ua);
-      rawResult = parser && (typeof parser.getResult === 'function' ? parser.getResult() : parser);
+    if (typeof b.parse === 'function') {
+      try { rawResult = b.parse(ua); } catch (e) { rawResult = null; }
+    } else if (typeof b.getParser === 'function') {
+      try {
+        const parser = b.getParser(ua);
+        rawResult = parser && (typeof parser.getResult === 'function' ? parser.getResult() : parser);
+      } catch (e) {
+        rawResult = null;
+      }
     }
   }
 
-  // 4) last resort: try calling the module as a function
-  else if (typeof bowser === 'function') {
-    try {
-      rawResult = bowser(ua);
-    } catch (err) {
-      rawResult = null;
-    }
+  // 4) last resort: call module as function
+  if (!rawResult && typeof bowser === 'function') {
+    try { rawResult = bowser(ua); } catch (e) { rawResult = null; }
   }
 
-  if (!rawResult) {
-    // Return a predictable shape even if Bowser didn't produce a result
+  if (!rawResult || typeof rawResult !== 'object') {
     return { ua, error: 'Bowser did not return a parse result', raw: rawResult };
   }
 
-  // Bowser result shape varies by version; normalize common fields
-  const browser = rawResult.browser || rawResult.client || null;
-  const engine = rawResult.engine || null;
-  const os = rawResult.os || null;
-  const platform = rawResult.platform || null;
+  // Bowser fields vary by version. Normalize common fields.
+  const browserRaw = rawResult.browser || rawResult.client || rawResult.client || null;
+  const engineRaw = rawResult.engine || null;
+  const osRaw = rawResult.os || null;
+  const platformRaw = rawResult.platform || rawResult.platformType || null;
 
-  // Determine device type booleans (best-effort)
-  const platformType = (platform && (platform.type || platform)) || null;
-  const platformJson = JSON.stringify(platform || {});
-  const isMobile = /mobile/i.test(String(platformType)) || /mobile/i.test(platformJson);
-  const isTablet = /tablet/i.test(String(platformType)) || /tablet/i.test(platformJson);
-  const isDesktop = !isMobile && !isTablet;
+  const browserName = browserRaw && (browserRaw.name || browserRaw) ? (browserRaw.name || browserRaw) : null;
+  const browserVersion = browserRaw && (browserRaw.version || browserRaw.versionName) ? (browserRaw.version || browserRaw.versionName) : null;
+  const browserVersionParts = splitVersion(browserVersion);
 
+  const engineName = engineRaw && engineRaw.name ? engineRaw.name : (engineRaw && engineRaw.engine ? engineRaw.engine : null);
+  const engineVersion = engineRaw && engineRaw.version ? engineRaw.version : null;
+  const engineVersionParts = splitVersion(engineVersion);
+
+  const osName = osRaw && osRaw.name ? osRaw.name : (osRaw && osRaw.os ? osRaw.os : null);
+  const osVersion = osRaw && osRaw.version ? osRaw.version : null;
+  const osVersionParts = splitVersion(osVersion);
+
+  // Platform can be object or string; try to extract type
+  const platformType = platformRaw && (platformRaw.type || platformRaw) ? (platformRaw.type || platformRaw) : null;
+  const platformJson = JSON.stringify(platformRaw || {});
+
+  // Device booleans (best-effort)
+  const isMobile = /mobile/i.test(String(platformType || '')) || /mobile/i.test(platformJson) || /\b(mobile|iphone|ipod|android.*mobile)\b/i.test(ua);
+  const isTablet = /tablet/i.test(String(platformType || '')) || /tablet/i.test(platformJson) || /\b(ipad|tablet|nexus 7|sm-t|kindle)\b/i.test(ua);
+  const isDesktop = !isMobile && !isTablet && !BOT_RE.test(ua);
+
+  // Bot detection: Bowser 2.x provides utils.is(bot) but we fallback to regex
+  const isBot = Boolean((rawResult && (rawResult.is && typeof rawResult.is === 'function' && rawResult.is('bot'))) || BOT_RE.test(ua) || /bot|crawler|spider/i.test(String(browserName || '')));
+
+  // device object normalization (brand/model may be under different keys)
+  const deviceObj = rawResult.platform || rawResult.device || platformRaw || {};
+  const deviceType = deviceObj && (deviceObj.type || deviceObj.name || deviceObj) ? (deviceObj.type || deviceObj.name || null) : null;
+  const deviceVendor = deviceObj && (deviceObj.vendor || deviceObj.vendorName) ? (deviceObj.vendor || deviceObj.vendorName) : null;
+  const deviceModel = deviceObj && (deviceObj.model || deviceObj.modelName) ? (deviceObj.model || deviceObj.modelName) : null;
+
+  // Provide final normalized structure
   return {
     ua,
-    browser: browser ? { name: browser.name || browser, version: browser.version || null } : null,
-    engine: engine ? { name: engine.name || null, version: engine.version || null } : null,
-    os: os ? { name: os.name || null, version: os.version || null } : null,
-    platform: platform ? platform : null,
+    // browser
+    browser: {
+      name: browserName || null,
+      version: browserVersion || null,
+      versionParts: browserVersionParts,
+      raw: browserRaw || null
+    },
+    // engine
+    engine: {
+      name: engineName || inferEngineFromUA(ua).name,
+      version: engineVersion || inferEngineFromUA(ua).version,
+      versionParts: engineVersionParts.ua ? engineVersionParts : inferEngineFromUA(ua).versionParts
+    },
+    // operating system
+    os: {
+      name: osName || null,
+      version: osVersion || null,
+      versionParts: osVersionParts,
+      raw: osRaw || null
+    },
+    // platform / device
+    platform: platformRaw || null,
     device: {
-      type: platformType || null,
+      type: deviceType || platformType || null,
+      vendor: deviceVendor || null,
+      model: deviceModel || null,
       isMobile,
       isTablet,
-      isDesktop
+      isDesktop,
+      isBot
     },
+    // convenience booleans
+    isMobile,
+    isTablet,
+    isDesktop,
+    isBot,
+    // raw provider result
     raw: rawResult
   };
 }

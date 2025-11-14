@@ -5,99 +5,140 @@ try {
   throw new Error('device is not installed. Run: npm install device');
 }
 
+const BOT_RE = /\b(bot|crawler|spider|crawl|slurp|fetch|mediapartners|pingdom|statuscake|uptime|monitor|scanner|archiver|validator|preview|transcoder)\b/i;
+
+function splitVersion(version) {
+  if (!version || typeof version !== 'string') return { raw: version || null, major: null, minor: null, patch: null };
+  const parts = version.split('.').map(p => p || null);
+  return { raw: version, major: parts[0] || null, minor: parts[1] || null, patch: parts[2] || null };
+}
+
+function inferTypeFromUA(ua) {
+  if (!ua) return 'desktop';
+  if (/\b(ipad|tablet|nexus 7|nexus 9|sm-t|gt-p|kindle|playbook)\b/i.test(ua)) return 'tablet';
+  if (/\b(mobile|iphone|ipod|android.*mobile|windows phone|bb10)\b/i.test(ua)) return 'mobile';
+  if (BOT_RE.test(ua)) return 'bot';
+  return 'desktop';
+}
+
 /**
- * Normalize the device module result into a compact, consistent shape.
- * The device module can expose a function that accepts a UA string and returns
- * an object. We handle a few common export shapes and return a predictable
- * shape even if some fields are missing.
+ * Call device module safely with several common shapes:
+ * - device(ua) -> object
+ * - device.default(ua) -> object
+ * - module exports object with .detect or .parse
+ */
+function callDeviceModule(ua) {
+  try {
+    if (typeof deviceModule === 'function') {
+      // common shape: device(ua)
+      return deviceModule(ua);
+    }
+    if (deviceModule && typeof deviceModule.default === 'function') {
+      return deviceModule.default(ua);
+    }
+    if (deviceModule && typeof deviceModule.detect === 'function') {
+      return deviceModule.detect(ua);
+    }
+    if (deviceModule && typeof deviceModule.parse === 'function') {
+      return deviceModule.parse(ua);
+    }
+    // last resort: if module exports an object with helpful keys, return it
+    return deviceModule;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Normalize the result from the device package into a consistent shape.
  *
- * @param {string} uaString
- * @returns {object}
+ * The device package (rguerreiro/device) commonly returns an object with:
+ *   { type, model, vendor, version?, manufacturer?, is? }
+ *
+ * but shapes vary by version. This wrapper is defensive and best-effort.
  */
 function parseUserAgent(uaString) {
-
-
-  var device = require('device');
-var mydevice = device(uaString);
- 
-
-
-
-
-
   const ua = uaString || '';
 
-  // Try calling the module in a few common ways
-  let raw = null;
+  // Try to obtain raw result from the module
+  let raw = callDeviceModule(ua) || {};
 
-  // 1) module is a function: device(ua)
-  if (typeof deviceModule === 'function') {
+  // If the module returned a middleware-like object when required (rare),
+  // attempt to call it again as function result
+  if (raw && typeof raw === 'object' && Object.keys(raw).length === 0 && typeof deviceModule === 'function') {
     try {
-      raw = deviceModule(ua);
-    } catch (err) {
-      raw = null;
+      raw = deviceModule(ua) || raw;
+    } catch (e) {
+      // ignore
     }
   }
 
-  // 2) module has default export that's a function
-  else if (deviceModule && typeof deviceModule.default === 'function') {
-    try {
-      raw = deviceModule.default(ua);
-    } catch (err) {
-      raw = null;
-    }
-  }
-
-  // If no result, return predictable shape
-  if (!raw || typeof raw !== 'object') {
-    return {
-      ua,
-      name: null,
-      type: null,
-      vendor: null,
-      model: null,
-      os: null,
-      isMobile: false,
-      isTablet: false,
-      isDesktop: false,
-      raw: raw
-    };
-  }
-
-  // Common field names the device module may use (best-effort)
-  // Try to extract sensible values from raw result
-  const name = raw.name || raw.device || raw.model || null;
-  const type = raw.type || raw.deviceType || (raw.isMobile ? 'mobile' : null) || null;
-  const vendor = raw.vendor || raw.manufacturer || null;
-  const model = raw.model || raw.brand || null;
+  // Normalize common fields (best-effort)
+  // device package field names seen in practice: type, model, vendor, name, os, manufacturer, brand, is
+  const typeRaw = raw.type || raw.deviceType || raw.kind || null; // e.g., 'mobile','tablet','desktop','tv'
+  const model = raw.model || raw.name || raw.device || null;
+  const vendor = raw.vendor || raw.brand || raw.manufacturer || null;
   const os = raw.os || raw.osName || raw.operatingSystem || null;
+  const version = raw.version || raw.osVersion || null;
 
-  // Heuristics for device category
-  const isMobile = Boolean(
-    raw.isMobile ||
-    /mobile/i.test(String(type || '')) ||
-    /phone/i.test(String(name || '')) ||
-    /iphone|android/i.test(String(ua))
-  );
+  // device.has 'is' helper in some libs (function) or boolean flags
+  const isChecks = {};
+  if (raw && typeof raw.is === 'function') {
+    const checks = ['mobile', 'phone', 'tablet', 'desktop', 'tv', 'bot'];
+    checks.forEach(k => {
+      try { isChecks[k] = !!raw.is(k); } catch (e) { isChecks[k] = false; }
+    });
+  } else {
+    // copy boolean-ish properties if present
+    isChecks.mobile = !!(raw.isMobile || raw.mobile || raw.phone);
+    isChecks.tablet = !!(raw.isTablet || raw.tablet);
+    isChecks.desktop = !!(raw.isDesktop || raw.desktop);
+    isChecks.tv = !!(raw.isTv || raw.tv);
+    isChecks.bot = !!(raw.isBot || raw.bot);
+  }
 
-  const isTablet = Boolean(
-    raw.isTablet ||
-    /tablet/i.test(String(type || '')) ||
-    /ipad|tablet/i.test(String(ua))
-  );
+  // determine final category using explicit type, isChecks, and UA heuristics
+  let type = null;
+  if (typeRaw) type = String(typeRaw).toLowerCase();
+  else if (isChecks.bot) type = 'bot';
+  else if (isChecks.tablet) type = 'tablet';
+  else if (isChecks.mobile) type = 'mobile';
+  else type = inferTypeFromUA(ua);
 
-  const isDesktop = !isMobile && !isTablet;
+  // map into friendly category: phone/tablet/desktop/bot/tv/other
+  let deviceCategory = 'other';
+  if (/bot|crawler|spider/.test(String(type))) deviceCategory = 'bot';
+  else if (type === 'mobile' || type === 'phone') deviceCategory = 'phone';
+  else if (type === 'tablet') deviceCategory = 'tablet';
+  else if (type === 'tv' || type === 'smarttv') deviceCategory = 'tv';
+  else if (type === 'desktop' || type === 'pc' || type === 'mac' || type === 'windows') deviceCategory = 'desktop';
+  else deviceCategory = type || inferTypeFromUA(ua);
+
+  // final boolean flags
+  const isBot = deviceCategory === 'bot' || BOT_RE.test(ua) || !!isChecks.bot;
+  const isTablet = deviceCategory === 'tablet' || !!isChecks.tablet;
+  const isMobile = deviceCategory === 'phone' || !!isChecks.mobile;
+  const isDesktop = deviceCategory === 'desktop' || !!isChecks.desktop || (!isMobile && !isTablet && !isBot);
 
   return {
     ua,
-    name,
-    type,
-    vendor,
-    model,
-    os,
+    // normalized device fields
+    type: type || null,
+    category: deviceCategory,
+    vendor: vendor || null,
+    model: model || null,
+    os: typeof os === 'string' ? os : (os && os.name ? `${os.name}${os.version ? ' ' + os.version : ''}` : null),
+    version: version || null,
+    // boolean flags
     isMobile,
     isTablet,
     isDesktop,
+    isBot,
+    // convenience: is checks (from module if available)
+    is: isChecks,
+    // version parts if available
+    versionParts: splitVersion(version),
+    // full raw result for debugging
     raw
   };
 }

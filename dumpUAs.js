@@ -128,6 +128,7 @@ function renderForUA(uaString) {
   }
 
   // express-useragent parsed info
+  /* This is too wordy - hard to work with
   try {
     const euInfo = parseUserAgentExpressUseragent(ua);
     out += 'express-useragent Parsed Info:\n';
@@ -138,6 +139,7 @@ function renderForUA(uaString) {
     out += JSON.stringify({ error: String(err) }, null, 2);
     out += '\n\n';
   }
+*/
 
   // my-ua-parser parsed info
   try {

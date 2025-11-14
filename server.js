@@ -53,6 +53,7 @@ const server = createServer((req, res) => {
     }
 
     // express-useragent parsed info
+    /* This is too wordy - hard to work with
     try {
       const euInfo = parseUserAgentExpressUseragent(ua);
       res.write('express-useragent Parsed Info:\n');
@@ -63,6 +64,7 @@ const server = createServer((req, res) => {
       res.write(JSON.stringify({ error: String(err) }, null, 2));
       res.write('\n\n');
     }
+/*
 
     // my-ua-parser parsed info
     try {

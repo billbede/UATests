@@ -1,19 +1,25 @@
 const UAParser = require('ua-parser-js');
 
-// Parse a UA string using ua-parser-js
+/**
+ * Call ua-parser-js and return its raw parse result exactly as the library
+ * provides it. No normalization, no extra fields.
+ *
+ * Returned shape: { ua: string, raw: <ua-parser-js-result-or-null> }
+ */
 function parseUserAgentUAParser(userAgent) {
-  const parser = new UAParser(userAgent || '');
-  const result = parser.getResult();
+  const ua = userAgent || '';
+  let raw = null;
 
-  // Return a compact, consistent shape
-  return {
-    ua: result.ua,
-    browser: result.browser,    // { name, version, major }
-    engine: result.engine,      // { name, version }
-    os: result.os,              // { name, version }
-    device: result.device,      // { vendor, model, type }
-    cpu: result.cpu             // { architecture }
-  };
+  try {
+    // UAParser can be used as a constructor taking the UA string
+    const parser = new UAParser(ua);
+    raw = typeof parser.getResult === 'function' ? parser.getResult() : parser;
+  } catch (e) {
+    // On error preserve null so callers can inspect failure
+    raw = null;
+  }
+
+  return { ua, raw };
 }
 
 module.exports = { parseUserAgentUAParser };

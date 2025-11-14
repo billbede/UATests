@@ -16,20 +16,39 @@ function resolveDetectFn(mod) {
 
 const detectFn = resolveDetectFn(detectModule);
 
+/**
+ * Call detect-browser in the most compatible ways and return the raw value
+ * produced by the library, without any mapping or inference.
+ *
+ * Returned shape: { ua: string, raw: <detect-browser-result-or-null> }
+ */
 function parseUserAgentDetectBrowser(uaString) {
   if (!detectFn) {
     throw new Error('detect-browser detect function not available');
   }
 
   const ua = uaString || '';
-  // detectFn returns an object like { name, version, os } or null if unknown
-  const raw = detectFn(ua);
+  let raw = null;
 
+  try {
+    // Prefer calling with the UA string if supported
+    raw = detectFn.length >= 1 ? detectFn(ua) : detectFn();
+  } catch (e) {
+    // If the primary call failed, try common alternative exports
+    try {
+      if (detectModule && typeof detectModule.detect === 'function') raw = detectModule.detect(ua);
+      else if (detectModule && detectModule.default && typeof detectModule.default.detect === 'function') raw = detectModule.default.detect(ua);
+      else if (typeof detectModule.parseUserAgent === 'function') raw = detectModule.parseUserAgent(ua);
+      else if (typeof detectModule === 'function') raw = detectModule(ua);
+      else raw = null;
+    } catch (ee) {
+      raw = null;
+    }
+  }
+
+  // Return exactly what the library returned (or null) so callers can stringify it themselves
   return {
     ua,
-    name: raw && raw.name ? raw.name : null,
-    version: raw && raw.version ? raw.version : null,
-    os: raw && raw.os ? raw.os : null,
     raw
   };
 }

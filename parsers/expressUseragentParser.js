@@ -5,7 +5,11 @@ try {
   throw new Error('express-useragent is not installed. Run: npm install express-useragent');
 }
 
-// Build a parse function that accepts a UA string and returns the parsed result
+/**
+ * Build a parse function that accepts a UA string and returns the parsed result.
+ * This mirrors common export shapes but does not normalize or augment the output.
+ * Returned parseFn must be synchronous (express-useragent middleware is synchronous).
+ */
 function buildParseFn(moduleExport) {
   // 1. direct parse function
   if (moduleExport && typeof moduleExport.parse === 'function') {
@@ -17,19 +21,18 @@ function buildParseFn(moduleExport) {
     return ua => moduleExport.default.parse(ua || '');
   }
 
-  // 3. module itself is a parse function (rare)
+  // 3. module itself is a parse function
   if (typeof moduleExport === 'function' && moduleExport.length === 1) {
-    // try calling it directly with UA string
     return ua => moduleExport(ua || '');
   }
 
   // 4. module exposes an express middleware factory (common)
-  //    e.g. module.express() or module() returns middleware (req, res, next)
+  //    try to create middleware and run it against a fake request
   const mwFactoryCandidates = [
     moduleExport && moduleExport.express,
     moduleExport && moduleExport.default && moduleExport.default.express,
-    moduleExport, // sometimes the module itself is the factory
-    moduleExport && moduleExport.default // or default is the factory
+    moduleExport,
+    moduleExport && moduleExport.default
   ].filter(Boolean);
 
   for (const factory of mwFactoryCandidates) {
@@ -37,28 +40,21 @@ function buildParseFn(moduleExport) {
       try {
         const mw = factory(); // create middleware
         if (typeof mw === 'function') {
-          // return a function that runs the middleware on a fake req
           return ua => {
-            const fakeReq = { headers: { 'user-agent': ua || '' }, useragent: null };
+            const fakeReq = { headers: { 'user-agent': ua || '' }, useragent: null, ua: null };
             const fakeRes = {};
-            // middleware may be sync or async; handle both
-            let called = false;
-            const next = () => { called = true; };
+            const next = () => {};
             try {
-              const maybePromise = mw(fakeReq, fakeRes, next);
-              if (maybePromise && typeof maybePromise.then === 'function') {
-                // middleware returned a promise; wait synchronously is not possible here,
-                // but express-useragent middleware is synchronous, so this is just a safeguard.
-              }
+              mw(fakeReq, fakeRes, next);
             } catch (err) {
-              // ignore middleware errors and return whatever was set on fakeReq
+              // ignore middleware errors
             }
-            // middleware should have set fakeReq.useragent
-            return fakeReq.useragent || {};
+            // return exactly what middleware put on the request (or undefined)
+            return fakeReq.useragent || fakeReq.ua || null;
           };
         }
       } catch (err) {
-        // factory invocation failed, try next candidate
+        // factory failed, try next candidate
       }
     }
   }
@@ -69,32 +65,27 @@ function buildParseFn(moduleExport) {
 
 const parseFn = buildParseFn(mod);
 
+/**
+ * Call express-useragent using library-specific shapes and return the raw value
+ * the library produces, without any mapping, in a prettifiable structure:
+ * { ua: string, raw: <express-useragent-result-or-null> }
+ */
 function parseUserAgentExpressUseragent(uaString) {
   if (!parseFn) {
     throw new Error('express-useragent parse function not available');
   }
 
-  const raw = parseFn(uaString || '');
+  const ua = uaString || '';
+  let raw = null;
 
-  // express-useragent returns an object with fields like:
-  // { source, ua, browser, version, os, platform, isMobile, isTablet, isDesktop, vendor, model }
-  const result = raw || {};
+  try {
+    raw = parseFn(ua);
+  } catch (e) {
+    // on error, preserve null so callers can inspect failure
+    raw = null;
+  }
 
-  return {
-    ua: result.source || uaString || '',
-    browser: { name: result.browser || null, version: result.version || null },
-    os: result.os || null,
-    platform: result.platform || null,
-    device: {
-      isMobile: !!result.isMobile,
-      isTablet: !!result.isTablet,
-      isDesktop: !!result.isDesktop,
-      vendor: result.vendor || null,
-      model: result.model || null
-    },
-    source: result.source || null,
-    raw: result
-  };
+  return { ua, raw };
 }
 
 module.exports = { parseUserAgentExpressUseragent };

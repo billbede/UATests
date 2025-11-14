@@ -6,100 +6,47 @@ try {
 }
 
 /**
- * Normalize the device module result into a compact, consistent shape.
- * The device module can expose a function that accepts a UA string and returns
- * an object. We handle a few common export shapes and return a predictable
- * shape even if some fields are missing.
+ * Call the device module using common export shapes and return the raw parse result
+ * exactly as the module provides it. No normalization, no heuristics, no extra fields.
  *
- * @param {string} uaString
- * @returns {object}
+ * Returned shape: { ua: string, raw: <device-module-result-or-null> }
  */
-function parseUserAgent(uaString) {
-
-
-  var device = require('device');
-var mydevice = device(uaString);
- 
-
-
-
-
-
+function parseUserAgentDevice(uaString) {
   const ua = uaString || '';
-
-  // Try calling the module in a few common ways
   let raw = null;
 
-  // 1) module is a function: device(ua)
-  if (typeof deviceModule === 'function') {
-    try {
+  try {
+    // Common shape: device(ua)
+    if (typeof deviceModule === 'function') {
       raw = deviceModule(ua);
-    } catch (err) {
-      raw = null;
     }
-  }
 
-  // 2) module has default export that's a function
-  else if (deviceModule && typeof deviceModule.default === 'function') {
-    try {
+    // Default-export function: device.default(ua)
+    if (!raw && deviceModule && typeof deviceModule.default === 'function') {
       raw = deviceModule.default(ua);
-    } catch (err) {
-      raw = null;
     }
+
+    // Named helper shapes: detect/parse
+    if (!raw && deviceModule && typeof deviceModule.detect === 'function') {
+      raw = deviceModule.detect(ua);
+    }
+    if (!raw && deviceModule && typeof deviceModule.parse === 'function') {
+      raw = deviceModule.parse(ua);
+    }
+
+    // If module exported an object that already looks like a result, return it (last resort)
+    if (!raw && deviceModule && typeof deviceModule === 'object') {
+      raw = deviceModule;
+    }
+  } catch (err) {
+    // On error, return null raw so callers can inspect failure
+    raw = null;
   }
-
-  // If no result, return predictable shape
-  if (!raw || typeof raw !== 'object') {
-    return {
-      ua,
-      name: null,
-      type: null,
-      vendor: null,
-      model: null,
-      os: null,
-      isMobile: false,
-      isTablet: false,
-      isDesktop: false,
-      raw: raw
-    };
-  }
-
-  // Common field names the device module may use (best-effort)
-  // Try to extract sensible values from raw result
-  const name = raw.name || raw.device || raw.model || null;
-  const type = raw.type || raw.deviceType || (raw.isMobile ? 'mobile' : null) || null;
-  const vendor = raw.vendor || raw.manufacturer || null;
-  const model = raw.model || raw.brand || null;
-  const os = raw.os || raw.osName || raw.operatingSystem || null;
-
-  // Heuristics for device category
-  const isMobile = Boolean(
-    raw.isMobile ||
-    /mobile/i.test(String(type || '')) ||
-    /phone/i.test(String(name || '')) ||
-    /iphone|android/i.test(String(ua))
-  );
-
-  const isTablet = Boolean(
-    raw.isTablet ||
-    /tablet/i.test(String(type || '')) ||
-    /ipad|tablet/i.test(String(ua))
-  );
-
-  const isDesktop = !isMobile && !isTablet;
 
   return {
     ua,
-    name,
-    type,
-    vendor,
-    model,
-    os,
-    isMobile,
-    isTablet,
-    isDesktop,
     raw
   };
 }
 
-module.exports = { parseUserAgent };
+module.exports = { parseUserAgentDevice };

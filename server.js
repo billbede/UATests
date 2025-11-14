@@ -1,12 +1,14 @@
 const { createServer } = require('node:http');
-const { parseUserAgent } = require('./parsers/deviceParser');           // device wrapper
-const { parseUserAgentUAParser } = require('./parsers/uaParser');       // ua-parser-js wrapper
-const { parseUserAgentUseragent } = require('./parsers/useragentParser'); // new useragent wrapper
-const { parseUserAgentMyUaParser } = require('./parsers/myUaParser');     // my-ua-parser wrapper
-const { parseUserAgentDeviceDetector } = require('./parsers/deviceDetectorParser'); // device-detector-js wrapper
-const { parseUserAgentExpressUseragent } = require('./parsers/expressUseragentParser'); // express-useragent wrapper
+
 const { parseUserAgentBowser } = require('./parsers/bowserParser');          // bowser wrapper
+const { parseUserAgentUAParser } = require('./parsers/uaParser');       // ua-parser-js wrapper
+const { parseUserAgentExpressUseragent } = require('./parsers/expressUseragentParser'); // express-useragent wrapper
+const { parseUserAgentMyUaParser } = require('./parsers/myUaParser');     // my-ua-parser wrapper
+
 const { parseUserAgentDetectBrowser } = require('./parsers/detectBrowserParser'); // detect-browser wrapper
+const { parseUserAgentUseragent } = require('./parsers/useragentParser'); // new useragent wrapper
+const { parseUserAgentDeviceDetector } = require('./parsers/deviceDetectorParser'); // device-detector-js wrapper
+const { parseUserAgentDevice } = require('./parsers/deviceParser');           // device wrapper
 
 const hostname = '127.0.0.1';
 const port = 3000;
@@ -26,17 +28,17 @@ const server = createServer((req, res) => {
 
     const ua = req.headers['user-agent'] || '';
 
-    // device parsed info
+    // bowser parsed info
     try {
-      const deviceInfo = parseUserAgent(ua);
-      res.write('device Parsed Info:\n');
-      res.write(JSON.stringify(deviceInfo, null, 2));
+      const bowserInfo = parseUserAgentBowser(ua);
+      res.write('bowser Parsed Info:\n');
+      res.write(JSON.stringify(bowserInfo, null, 2));
       res.write('\n\n');
     } catch (err) {
-      res.write('device Parsed Info:\n');
+      res.write('bowser Parsed Info:\n');
       res.write(JSON.stringify({ error: String(err) }, null, 2));
       res.write('\n\n');
-    }    
+    }
 
     // ua-parser-js parsed info
     try {
@@ -46,40 +48,6 @@ const server = createServer((req, res) => {
       res.write('\n\n');
     } catch (err) {
       res.write('ua-parser-js Parsed Info:\n');
-      res.write(JSON.stringify({ error: String(err) }, null, 2));
-      res.write('\n\n');
-    }
-
-    // useragent parsed info
-    try {
-      const uaUseragentInfo = parseUserAgentUseragent(ua);
-      res.write('useragent Parsed Info:\n');
-      res.write(JSON.stringify(uaUseragentInfo, null, 2));
-    } catch (err) {
-      res.write('useragent Parsed Info:\n');
-      res.write(JSON.stringify({ error: String(err) }, null, 2));
-    }
-
-    // my-ua-parser parsed info
-    try {
-      const myUaInfo = parseUserAgentMyUaParser(ua);
-      res.write('my-ua-parser Parsed Info:\n');
-      res.write(JSON.stringify(myUaInfo, null, 2));
-      res.write('\n\n');
-    } catch (err) {
-      res.write('my-ua-parser Parsed Info:\n');
-      res.write(JSON.stringify({ error: String(err) }, null, 2));
-      res.write('\n\n');
-    }
-
-    // device-detector-js parsed info
-    try {
-      const ddInfo = parseUserAgentDeviceDetector(ua);
-      res.write('device-detector-js Parsed Info:\n');
-      res.write(JSON.stringify(ddInfo, null, 2));
-      res.write('\n\n');
-    } catch (err) {
-      res.write('device-detector-js Parsed Info:\n');
       res.write(JSON.stringify({ error: String(err) }, null, 2));
       res.write('\n\n');
     }
@@ -96,30 +64,67 @@ const server = createServer((req, res) => {
       res.write('\n\n');
     }
 
-
-    // bowser parsed info
+    // my-ua-parser parsed info
     try {
-      const bowserInfo = parseUserAgentBowser(ua);
-      res.write('bowser Parsed Info:\n');
-      res.write(JSON.stringify(bowserInfo, null, 2));
+      const myUaInfo = parseUserAgentMyUaParser(ua);
+      res.write('my-ua-parser Parsed Info:\n');
+      res.write(JSON.stringify(myUaInfo, null, 2));
       res.write('\n\n');
     } catch (err) {
-      res.write('bowser Parsed Info:\n');
+      res.write('my-ua-parser Parsed Info:\n');
       res.write(JSON.stringify({ error: String(err) }, null, 2));
       res.write('\n\n');
     }
 
-    // detect-browser parsed info
-    try {
-      const dbInfo = parseUserAgentDetectBrowser(ua);
-      res.write('detect-browser Parsed Info:\n');
-      res.write(JSON.stringify(dbInfo, null, 2));
-      res.write('\n\n');
-    } catch (err) {
-      res.write('detect-browser Parsed Info:\n');
-      res.write(JSON.stringify({ error: String(err) }, null, 2));
-      res.write('\n\n');
-    }
+
+    // NOT ACTIVE
+    /*
+        // detect-browser parsed info
+        try {
+          const dbInfo = parseUserAgentDetectBrowser(ua);
+          res.write('detect-browser Parsed Info:\n');
+          res.write(JSON.stringify(dbInfo, null, 2));
+          res.write('\n\n');
+        } catch (err) {
+          res.write('detect-browser Parsed Info:\n');
+          res.write(JSON.stringify({ error: String(err) }, null, 2));
+          res.write('\n\n');
+        }
+    
+        // useragent parsed info
+        try {
+          const uaUseragentInfo = parseUserAgentUseragent(ua);
+          res.write('useragent Parsed Info:\n');
+          res.write(JSON.stringify(uaUseragentInfo, null, 2));
+        } catch (err) {
+          res.write('useragent Parsed Info:\n');
+          res.write(JSON.stringify({ error: String(err) }, null, 2));
+        }
+    
+        // device-detector-js parsed info
+        try {
+          const ddInfo = parseUserAgentDeviceDetector(ua);
+          res.write('device-detector-js Parsed Info:\n');
+          res.write(JSON.stringify(ddInfo, null, 2));
+          res.write('\n\n');
+        } catch (err) {
+          res.write('device-detector-js Parsed Info:\n');
+          res.write(JSON.stringify({ error: String(err) }, null, 2));
+          res.write('\n\n');
+        }
+    
+        // device parsed info
+        try {
+          const deviceInfo = parseUserAgentDevice(ua);
+          res.write('device Parsed Info:\n');
+          res.write(JSON.stringify(deviceInfo, null, 2));
+          res.write('\n\n');
+        } catch (err) {
+          res.write('device Parsed Info:\n');
+          res.write(JSON.stringify({ error: String(err) }, null, 2));
+          res.write('\n\n');
+        }    
+    */
 
     res.end();
   });

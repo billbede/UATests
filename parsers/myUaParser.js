@@ -2,65 +2,96 @@ let provider = null;
 let providerName = null;
 
 try {
-  // try the requested package first
   provider = require('my-ua-parser');
   providerName = 'my-ua-parser';
 } catch (e) {
-  // fallback to ua-parser-js which is widely available
+  // fallback to ua-parser-js which is widely available and has a stable API
   provider = require('ua-parser-js');
   providerName = 'ua-parser-js';
 }
 
 /**
- * Parse a UA string using the available provider.
- * Returns a normalized object with common fields.
+ * Call the installed provider in the most compatible ways and return the raw
+ * value produced by the library, without any mapping, inference, or added fields.
+ *
+ * Returned shape: { ua: string, provider: 'my-ua-parser'|'ua-parser-js', raw: <provider-result-or-null> }
  */
 function parseUserAgentMyUaParser(uaString) {
   const ua = uaString || '';
+  let raw = null;
+  let used = providerName;
 
-  if (providerName === 'my-ua-parser') {
-    // Best-effort handling for unknown provider API shapes.
-    // Try common patterns: constructor, factory, or exported UAParser.
-    try {
-      // If provider is a constructor or factory function
-      if (typeof provider === 'function') {
-        const instance = (provider.prototype && Object.keys(provider.prototype).length)
-          ? new provider(ua) // constructor-like
-          : provider(ua);     // factory-like
-        const result = instance && (instance.getResult ? instance.getResult() : (instance.parse ? instance.parse(ua) : instance));
-        return normalizeResult(ua, result);
+  try {
+    // If provider is a function: constructor, factory or direct parser
+    if (typeof provider === 'function') {
+      // Try constructor-like `new provider(ua)` first if it appears to have prototype methods
+      if (provider.prototype && Object.keys(provider.prototype).length > 0) {
+        try {
+          const inst = new provider(ua);
+          raw = inst && (typeof inst.getResult === 'function' ? inst.getResult() : (typeof inst.parse === 'function' ? inst.parse(ua) : inst));
+        } catch (err) {
+          // constructor failed — try calling as factory
+          const out = provider(ua);
+          raw = out && (typeof out.getResult === 'function' ? out.getResult() : (typeof out.parse === 'function' ? out.parse(ua) : out));
+        }
+      } else {
+        // factory or direct-call shape
+        const out = provider(ua);
+        raw = out && (typeof out.getResult === 'function' ? out.getResult() : (typeof out.parse === 'function' ? out.parse(ua) : out));
       }
-
-      // If provider exports UAParser or similar
-      if (provider && provider.UAParser) {
-        const instance = new provider.UAParser(ua);
-        const result = instance.getResult ? instance.getResult() : instance;
-        return normalizeResult(ua, result);
+    }
+    // If provider exports UAParser-like class/constructor as property
+    else if (provider && typeof provider.UAParser === 'function') {
+      const inst = new provider.UAParser(ua);
+      raw = inst && (typeof inst.getResult === 'function' ? inst.getResult() : inst);
+    }
+    // If provider exposes parse/getResult directly on the export
+    else if (provider && typeof provider.parse === 'function') {
+      raw = provider.parse(ua);
+    } else if (provider && typeof provider.getResult === 'function') {
+      raw = provider.getResult(ua);
+    }
+    // default-export interop
+    else if (provider && provider.default) {
+      const p = provider.default;
+      if (typeof p === 'function') {
+        const out = p(ua);
+        raw = out && (typeof out.getResult === 'function' ? out.getResult() : (typeof out.parse === 'function' ? out.parse(ua) : out));
+      } else if (typeof p.parse === 'function') {
+        raw = p.parse(ua);
+      } else if (typeof p.getResult === 'function') {
+        raw = p.getResult(ua);
       }
-
-      // Last resort: return raw provider value
-      return { ua, raw: provider };
-    } catch (err) {
-      // If anything goes wrong, fall back to ua-parser-js below
+    }
+  } catch (err) {
+    // On error, attempt an explicit fallback to ua-parser-js if it wasn't already used
+    if (used !== 'ua-parser-js') {
+      try {
+        const UAParser = require('ua-parser-js');
+        raw = new UAParser(ua).getResult();
+        used = 'ua-parser-js';
+      } catch (e) {
+        raw = null;
+      }
+    } else {
+      raw = null;
     }
   }
 
-  // Fallback path using ua-parser-js
-  const UAParser = provider; // provider is ua-parser-js here
-  const result = new UAParser(ua).getResult();
-  return normalizeResult(ua, result);
-}
+  // Final fallback: if nothing was obtained and providerName was ua-parser-js, try one more time
+  if (!raw && used === 'ua-parser-js') {
+    try {
+      const UAParser = require('ua-parser-js');
+      raw = new UAParser(ua).getResult();
+    } catch (e) {
+      raw = null;
+    }
+  }
 
-// Normalize different parser outputs into a compact shape
-function normalizeResult(ua, result = {}) {
   return {
     ua,
-    browser: result.browser || result.client || null,
-    engine: result.engine || null,
-    os: result.os || null,
-    device: result.device || null,
-    cpu: result.cpu || null,
-    raw: result // include raw provider result for inspection
+    provider: used,
+    raw: raw === undefined ? null : raw
   };
 }
 

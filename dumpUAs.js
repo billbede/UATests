@@ -1,14 +1,15 @@
 const fs = require('fs');
 const path = require('path');
 
-const { parseUserAgent } = require('./parsers/deviceParser');
-const { parseUserAgentUAParser } = require('./parsers/uaParser');
-const { parseUserAgentUseragent } = require('./parsers/useragentParser');
-const { parseUserAgentMyUaParser } = require('./parsers/myUaParser');
-const { parseUserAgentDeviceDetector } = require('./parsers/deviceDetectorParser');
-const { parseUserAgentExpressUseragent } = require('./parsers/expressUseragentParser');
-const { parseUserAgentBowser } = require('./parsers/bowserParser');
-const { parseUserAgentDetectBrowser } = require('./parsers/detectBrowserParser');
+const { parseUserAgentBowser } = require('./parsers/bowserParser');          // bowser wrapper
+const { parseUserAgentUAParser } = require('./parsers/uaParser');       // ua-parser-js wrapper
+const { parseUserAgentExpressUseragent } = require('./parsers/expressUseragentParser'); // express-useragent wrapper
+const { parseUserAgentMyUaParser } = require('./parsers/myUaParser');     // my-ua-parser wrapper
+
+const { parseUserAgentDetectBrowser } = require('./parsers/detectBrowserParser'); // detect-browser wrapper
+const { parseUserAgentUseragent } = require('./parsers/useragentParser'); // new useragent wrapper
+const { parseUserAgentDeviceDetector } = require('./parsers/deviceDetectorParser'); // device-detector-js wrapper
+const { parseUserAgentDevice } = require('./parsers/deviceParser');           // device wrapper
 
 // CONFIG: change these paths/names as desired
 const inputPath = path.join(__dirname, 'uas.txt');      // or null to use inline array
@@ -54,7 +55,7 @@ const inlineUAs = [
 
   //HTC Desire HD A9191
   'Mozilla/5.0 (Linux; U; Android 2.3.5; en-gb; HTC Desire HD A9191 Build/GRJ90) AppleWebKit/533.1 (KHTML, like Gecko) Version/4.0 Mobile Safari/533.1',
-  
+
   //Native IOS app
   'AppName/269 CFNetwork/1494.0.7 Darwin/23.4.0',
 
@@ -101,14 +102,15 @@ function renderForUA(uaString) {
   out += `================================================================================\n`;
   out += `${JSON.stringify({ 'user-agent': ua }, null, 2)}\n\n`;
 
-  // device parsed info
+
+  // bowser parsed info
   try {
-    const deviceInfo = parseUserAgent(ua);
-    out += 'device Parsed Info:\n';
-    out += JSON.stringify(deviceInfo, null, 2);
+    const bowserInfo = parseUserAgentBowser(ua);
+    out += 'bowser Parsed Info:\n';
+    out += JSON.stringify(bowserInfo, null, 2);
     out += '\n\n';
   } catch (err) {
-    out += 'device Parsed Info:\n';
+    out += 'bowser Parsed Info:\n';
     out += JSON.stringify({ error: String(err) }, null, 2);
     out += '\n\n';
   }
@@ -125,14 +127,14 @@ function renderForUA(uaString) {
     out += '\n\n';
   }
 
-  // useragent parsed info
+  // express-useragent parsed info
   try {
-    const uaUseragentInfo = parseUserAgentUseragent(ua);
-    out += 'useragent Parsed Info:\n';
-    out += JSON.stringify(uaUseragentInfo, null, 2);
+    const euInfo = parseUserAgentExpressUseragent(ua);
+    out += 'express-useragent Parsed Info:\n';
+    out += JSON.stringify(euInfo, null, 2);
     out += '\n\n';
   } catch (err) {
-    out += 'useragent Parsed Info:\n';
+    out += 'express-useragent Parsed Info:\n';
     out += JSON.stringify({ error: String(err) }, null, 2);
     out += '\n\n';
   }
@@ -149,53 +151,57 @@ function renderForUA(uaString) {
     out += '\n\n';
   }
 
-  // device-detector-js parsed info
-  try {
-    const ddInfo = parseUserAgentDeviceDetector(ua);
-    out += 'device-detector-js Parsed Info:\n';
-    out += JSON.stringify(ddInfo, null, 2);
-    out += '\n\n';
-  } catch (err) {
-    out += 'device-detector-js Parsed Info:\n';
-    out += JSON.stringify({ error: String(err) }, null, 2);
-    out += '\n\n';
-  }
 
-  // express-useragent parsed info
-  try {
-    const euInfo = parseUserAgentExpressUseragent(ua);
-    out += 'express-useragent Parsed Info:\n';
-    out += JSON.stringify(euInfo, null, 2);
-    out += '\n\n';
-  } catch (err) {
-    out += 'express-useragent Parsed Info:\n';
-    out += JSON.stringify({ error: String(err) }, null, 2);
-    out += '\n\n';
-  }
-
-  // bowser parsed info
-  try {
-    const bowserInfo = parseUserAgentBowser(ua);
-    out += 'bowser Parsed Info:\n';
-    out += JSON.stringify(bowserInfo, null, 2);
-    out += '\n\n';
-  } catch (err) {
-    out += 'bowser Parsed Info:\n';
-    out += JSON.stringify({ error: String(err) }, null, 2);
-    out += '\n\n';
-  }
-
-  // detect-browser parsed info
-  try {
-    const dbInfo = parseUserAgentDetectBrowser(ua);
-    out += 'detect-browser Parsed Info:\n';
-    out += JSON.stringify(dbInfo, null, 2);
-    out += '\n\n';
-  } catch (err) {
-    out += 'detect-browser Parsed Info:\n';
-    out += JSON.stringify({ error: String(err) }, null, 2);
-    out += '\n\n';
-  }
+  // NOT ACTIVE
+  /*
+    // detect-browser parsed info
+    try {
+      const dbInfo = parseUserAgentDetectBrowser(ua);
+      out += 'detect-browser Parsed Info:\n';
+      out += JSON.stringify(dbInfo, null, 2);
+      out += '\n\n';
+    } catch (err) {
+      out += 'detect-browser Parsed Info:\n';
+      out += JSON.stringify({ error: String(err) }, null, 2);
+      out += '\n\n';
+    }
+  
+    // useragent parsed info
+    try {
+      const uaUseragentInfo = parseUserAgentUseragent(ua);
+      out += 'useragent Parsed Info:\n';
+      out += JSON.stringify(uaUseragentInfo, null, 2);
+      out += '\n\n';
+    } catch (err) {
+      out += 'useragent Parsed Info:\n';
+      out += JSON.stringify({ error: String(err) }, null, 2);
+      out += '\n\n';
+    }
+  
+    // device-detector-js parsed info
+    try {
+      const ddInfo = parseUserAgentDeviceDetector(ua);
+      out += 'device-detector-js Parsed Info:\n';
+      out += JSON.stringify(ddInfo, null, 2);
+      out += '\n\n';
+    } catch (err) {
+      out += 'device-detector-js Parsed Info:\n';
+      out += JSON.stringify({ error: String(err) }, null, 2);
+      out += '\n\n';
+    }
+  
+    // device parsed info
+    try {
+      const deviceInfo = parseUserAgentDevice(ua);
+      out += 'device Parsed Info:\n';
+      out += JSON.stringify(deviceInfo, null, 2);
+      out += '\n\n';
+    } catch (err) {
+      out += 'device Parsed Info:\n';
+      out += JSON.stringify({ error: String(err) }, null, 2);
+      out += '\n\n';
+    }
+  */
 
   return out;
 }

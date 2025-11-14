@@ -4,22 +4,25 @@ const DeviceDetector = require('device-detector-js');
 const detector = new DeviceDetector();
 
 /**
- * Parse a UA string using device-detector-js and return a normalized object.
- * @param {string} uaString
- * @returns {object}
+ * Call device-detector-js and return the raw parse result exactly as the library
+ * provides it. No normalization, no extra fields.
+ *
+ * Returned shape: { ua: string, raw: <device-detector-result-or-null> }
  */
 function parseUserAgentDeviceDetector(uaString) {
   const ua = uaString || '';
-  const result = detector.parse(ua);
+  let raw = null;
 
-  // Normalize into a compact, consistent shape
+  try {
+    // detector.parse returns an object with client, os, device, bot, etc.
+    raw = detector.parse(ua);
+  } catch (e) {
+    raw = null;
+  }
+
   return {
     ua,
-    client: result.client || null,    // { type, name, version }
-    os: result.os || null,            // { name, version }
-    device: result.device || null,    // { type, brand, model }
-    bot: result.bot || null,          // bot info if detected
-    raw: result                        // full provider result for inspection
+    raw
   };
 }
 
